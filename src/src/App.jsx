@@ -293,14 +293,24 @@ export default function App() {
     fetchAllEvents();
   }, []);
 
-  const categoryFromTM = (classifications) => {
+  const categoryFromTM = (classifications, eventName = "") => {
     if (!classifications || !classifications[0]) return "Music";
-    const seg = classifications[0].segment?.name || "";
-    const genre = classifications[0].genre?.name || "";
-    if (seg === "Sports") return "Sports";
-    if (seg === "Arts & Theatre") return "Arts";
-    if (genre === "Comedy") return "Arts";
-    if (genre === "Classical") return "Arts";
+    const seg = (classifications[0].segment?.name || "").toLowerCase();
+    const genre = (classifications[0].genre?.name || "").toLowerCase();
+    const subGenre = (classifications[0].subGenre?.name || "").toLowerCase();
+    const name = eventName.toLowerCase();
+
+    if (seg === "sports") return "Sports";
+    if (seg === "arts & theatre" || seg === "arts & theater") return "Arts";
+    if (genre === "comedy") return "Arts";
+    if (genre === "classical" || genre === "opera" || genre === "ballet") return "Arts";
+    if (genre === "theatre" || genre === "theater" || genre === "cirque") return "Arts";
+    if (genre === "food & drink" || genre === "food" || genre === "dining") return "Food & Drink";
+    if (genre === "outdoor" || genre === "nature" || subGenre === "outdoor") return "Outdoors";
+    if (name.includes("food") || name.includes("dinner") || name.includes("brunch") || name.includes("tasting") || name.includes("bbq") || name.includes("beer") || name.includes("bourbon") || name.includes("whiskey")) return "Food & Drink";
+    if (name.includes("hike") || name.includes("trail") || name.includes("kayak") || name.includes("outdoor") || name.includes("run") || name.includes("5k")) return "Outdoors";
+    if (name.includes("comedy") || name.includes("stand-up") || name.includes("improv")) return "Arts";
+    if (name.includes("art") || name.includes("gallery") || name.includes("museum") || name.includes("exhibit")) return "Arts";
     return "Music";
   };
 
@@ -326,8 +336,8 @@ export default function App() {
         const diffDays = Math.round((eventMidnight - localToday) / (1000 * 60 * 60 * 24));
         const day = Math.max(0, Math.min(6, diffDays));
         const venue = ev._embedded?.venues?.[0];
-        const price = ev.priceRanges ? `$${Math.round(ev.priceRanges[0].min)}-$${Math.round(ev.priceRanges[0].max)}` : "See site";
-        const cat = categoryFromTM(ev.classifications);
+        const price = ev.priceRanges ? `$${Math.round(ev.priceRanges[0].min)}+` : "See site";
+        const cat = categoryFromTM(ev.classifications, ev.name || "");
         const ticketUrl = ev.url ? `${ev.url}${AFFILIATES.seatgeek !== "YOUR_SEATGEEK_ID" ? `?aid=${AFFILIATES.seatgeek}` : ""}` : sgLink(ev.name);
         return {
           id: `tm_${ev.id}`,
@@ -340,7 +350,7 @@ export default function App() {
           category: cat,
           emoji: emojiFromCategory(cat),
           tags: [cat, ev.priceRanges ? price : "Free"],
-          free: !ev.priceRanges,
+          free: false,
           price: ev.priceRanges ? price : "Free",
           desc: `${ev.name} at ${venue?.name || "Louisville"}. ${ev.info || ev.pleaseNote || "Check the venue website for more details."}`,
           ticketUrl,
