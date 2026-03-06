@@ -290,8 +290,7 @@ export default function App() {
   useEffect(() => {
     if (tmLoadedRef.current) return;
     tmLoadedRef.current = true;
-    fetchTicketmasterEvents();
-    fetchEventbriteEvents();
+    fetchAllEvents();
   }, []);
 
   const categoryFromTM = (classifications) => {
@@ -310,17 +309,21 @@ export default function App() {
     return map[cat] || "🎵";
   };
 
-  const fetchTicketmasterEvents = async () => {
+  const fetchAllEvents = async () => {
     setTmLoading(true);
     try {
       const res = await fetch("/api/events");
       const data = await res.json();
+
+      // Get local today date string to compare
+      const now = new Date();
+      const localToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
       const tmEvents = data.ticketmaster || [];
       const mapped = tmEvents.map((ev, i) => {
-        const eventDate = new Date(ev.dates?.start?.localDate + "T12:00:00");
-        const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const eventMidnight = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-        const diffDays = Math.round((eventMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
+        const [yr, mo, dy] = (ev.dates?.start?.localDate || "").split("-").map(Number);
+        const eventMidnight = new Date(yr, mo - 1, dy);
+        const diffDays = Math.round((eventMidnight - localToday) / (1000 * 60 * 60 * 24));
         const day = Math.max(0, Math.min(6, diffDays));
         const venue = ev._embedded?.venues?.[0];
         const price = ev.priceRanges ? `$${Math.round(ev.priceRanges[0].min)}-$${Math.round(ev.priceRanges[0].max)}` : "See site";
@@ -354,14 +357,16 @@ export default function App() {
 
   const fetchEventbriteEvents = async () => {
     try {
+      const now2 = new Date();
+      const localToday = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate());
       const res = await fetch("/api/events");
       const data = await res.json();
       const ebEvents = data.eventbrite || [];
       const mapped = ebEvents.map((ev, i) => {
-        const eventDate = new Date(ev.start?.local);
-        const todayMidnight2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const eventMidnight2 = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-        const diffDays = Math.round((eventMidnight2 - todayMidnight2) / (1000 * 60 * 60 * 24));
+        const ebDateStr = (ev.start?.local || "").split("T")[0];
+        const [eyr, emo, edy] = ebDateStr.split("-").map(Number);
+        const eventMidnight2 = new Date(eyr, emo - 1, edy);
+        const diffDays = Math.round((eventMidnight2 - localToday) / (1000 * 60 * 60 * 24));
         const day = Math.max(0, Math.min(6, diffDays));
         const isFree = ev.is_free;
         const price = isFree ? "Free" : (ev.ticket_availability?.minimum_ticket_price?.display || "See site");
