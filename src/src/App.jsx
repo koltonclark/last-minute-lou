@@ -278,8 +278,8 @@ export default function App() {
   };
 
   // All event state — editable
-  const [events, setEvents] = useState(SEED_EVENTS);
-  const [majorEvts, setMajorEvts] = useState(SEED_MAJOR);
+  const [events, setEvents] = useState([]);
+  const [majorEvts, setMajorEvts] = useState([]);
 
   // AI event generation
   const [tmLoading, setTmLoading] = useState(false);
