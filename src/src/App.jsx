@@ -330,7 +330,14 @@ export default function App() {
       const localToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       const tmEvents = data.ticketmaster || [];
-      const mapped = tmEvents.map((ev, i) => {
+      const mapped = tmEvents.filter(ev => {
+        const name = (ev.name || "").toLowerCase();
+        // Filter out internal Ticketmaster placeholder events
+        if (name.includes("not a ticket")) return false;
+        if (name.includes("rofr holding")) return false;
+        if (name.includes("simulcast") && !name.includes("concert")) return false;
+        return true;
+      }).map((ev, i) => {
         const [yr, mo, dy] = (ev.dates?.start?.localDate || "").split("-").map(Number);
         const eventMidnight = new Date(yr, mo - 1, dy);
         const diffDays = Math.round((eventMidnight - localToday) / (1000 * 60 * 60 * 24));
@@ -349,7 +356,7 @@ export default function App() {
           doors: "See venue",
           category: cat,
           emoji: emojiFromCategory(cat),
-          tags: [cat, ev.priceRanges ? price : "Free"],
+          tags: [cat, ev.priceRanges ? price : "See site"],
           free: false,
           price: ev.priceRanges ? price : "Free",
           desc: `${ev.name} at ${venue?.name || "Louisville"}. ${ev.info || ev.pleaseNote || "Check the venue website for more details."}`,
