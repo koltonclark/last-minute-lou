@@ -1,6 +1,7 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
   
   const TM_KEY = 'McmmI1XAvDjXiBx0REoXS2ZqRg5oAh7U';
   const EB_KEY = '42YKTNSWNBQDOGO7V4';
