@@ -278,68 +278,121 @@ export default function App() {
   };
 
   // All event state — editable
-  const [events, setEvents] = useState(SEED_EVENTS);
-  const [majorEvts, setMajorEvts] = useState(SEED_MAJOR);
+  const [events, setEvents] = useState([]);
+  const [majorEvts, setMajorEvts] = useState([]);
 
   // AI event generation
-  const [aiLoading, setAiLoading] = useState(false);
-  const aiLoadedRef = useRef(false);
+  const [tmLoading, setTmLoading] = useState(false);
+  const tmLoadedRef = useRef(false);
+  const TM_KEY = "McmmI1XAvDjXiBx0REoXS2ZqRg5oAh7U";
+  const EB_KEY = "42YKTNSWNBQDOGO7V4";
 
   useEffect(() => {
-    if (aiLoadedRef.current) return;
-    aiLoadedRef.current = true;
-    generateAiEvents();
+    if (tmLoadedRef.current) return;
+    tmLoadedRef.current = true;
+    fetchAllEvents();
   }, []);
 
-  const generateAiEvents = async () => {
-    setAiLoading(true);
-    const today = new Date();
-    const dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-    const prompt = `You are a Louisville, KY local events expert. Generate 12 realistic, specific, and varied local events happening in Louisville this week (today is ${dayNames[today.getDay()]}). Spread them across all 7 days (day 0 = today, day 6 = 6 days from now).
+  const categoryFromTM = (classifications) => {
+    if (!classifications || !classifications[0]) return "Music";
+    const seg = classifications[0].segment?.name || "";
+    const genre = classifications[0].genre?.name || "";
+    if (seg === "Sports") return "Sports";
+    if (seg === "Arts & Theatre") return "Arts";
+    if (genre === "Comedy") return "Arts";
+    if (genre === "Classical") return "Arts";
+    return "Music";
+  };
 
-Return ONLY a valid JSON array. Each event must have exactly these fields:
-- title: string
-- venue: string (real Louisville venue)
-- address: string (real Louisville address)
-- time: string (e.g. "8 PM")
-- doors: string (e.g. "7 PM")  
-- category: one of exactly ["Music","Food & Drink","Sports","Arts","Outdoors"]
-- emoji: single emoji character
-- price: string (e.g. "Free" or "$15-$25")
-- free: boolean
-- day: number 0-6
-- desc: string (2 sentences, vivid and specific)
-- tags: array of 1-3 short strings
+  const emojiFromCategory = (cat) => {
+    const map = { Music:"🎵", Sports:"🏅", Arts:"🎭", "Food & Drink":"🍺", Outdoors:"🌿" };
+    return map[cat] || "🎵";
+  };
 
-Return only the JSON array, no markdown, no explanation.`;
-
+  const fetchAllEvents = async () => {
+    setTmLoading(true);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 2000,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
+      const res = await fetch("/api/events");
       const data = await res.json();
-      const text = data.content?.map(b => b.text || "").join("") || "[]";
-      const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
-      const withIds = parsed.map((e, i) => ({
-        ...e,
-        id: `ai_${Date.now()}_${i}`,
-        ticketUrl: e.free ? undefined : sgLink(e.title),
-        ticketLabel: e.free ? undefined : "🎟 Get Tickets",
-        reservationUrl: e.category === "Food & Drink" ? otLink(e.venue) : undefined,
-        reservationLabel: e.category === "Food & Drink" ? "🍽 Reserve a Table" : undefined,
-      }));
-      setEvents(prev => [...prev, ...withIds]);
+
+      // Get local today date string to compare
+      const now = new Date();
+      const localToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      const tmEvents = data.ticketmaster || [];
+      const mapped = tmEvents.map((ev, i) => {
+        const [yr, mo, dy] = (ev.dates?.start?.localDate || "").split("-").map(Number);
+        const eventMidnight = new Date(yr, mo - 1, dy);
+        const diffDays = Math.round((eventMidnight - localToday) / (1000 * 60 * 60 * 24));
+        const day = Math.max(0, Math.min(6, diffDays));
+        const venue = ev._embedded?.venues?.[0];
+        const price = ev.priceRanges ? `$${Math.round(ev.priceRanges[0].min)}-$${Math.round(ev.priceRanges[0].max)}` : "See site";
+        const cat = categoryFromTM(ev.classifications);
+        const ticketUrl = ev.url ? `${ev.url}${AFFILIATES.seatgeek !== "YOUR_SEATGEEK_ID" ? `?aid=${AFFILIATES.seatgeek}` : ""}` : sgLink(ev.name);
+        return {
+          id: `tm_${ev.id}`,
+          day,
+          title: ev.name,
+          venue: venue?.name || "Louisville Venue",
+          address: venue ? `${venue.address?.line1 || ""}, ${venue.city?.name || "Louisville"}, KY` : "Louisville, KY",
+          time: ev.dates?.start?.localTime ? new Date(`2000-01-01T${ev.dates.start.localTime}`).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}) : "TBA",
+          doors: "See venue",
+          category: cat,
+          emoji: emojiFromCategory(cat),
+          tags: [cat, ev.priceRanges ? price : "Free"],
+          free: !ev.priceRanges,
+          price: ev.priceRanges ? price : "Free",
+          desc: `${ev.name} at ${venue?.name || "Louisville"}. ${ev.info || ev.pleaseNote || "Check the venue website for more details."}`,
+          ticketUrl,
+          ticketLabel: "🎟 Buy Tickets",
+          isMajor: false,
+        };
+      });
+      setEvents(prev => [...prev, ...mapped]);
     } catch(err) {
-      console.error("AI event gen failed:", err);
+      console.error("Ticketmaster fetch failed:", err);
     }
-    setAiLoading(false);
+    setTmLoading(false);
+  };
+
+  const fetchEventbriteEvents = async () => {
+    try {
+      const now2 = new Date();
+      const localToday = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate());
+      const res = await fetch("/api/events");
+      const data = await res.json();
+      const ebEvents = data.eventbrite || [];
+      const mapped = ebEvents.map((ev, i) => {
+        const ebDateStr = (ev.start?.local || "").split("T")[0];
+        const [eyr, emo, edy] = ebDateStr.split("-").map(Number);
+        const eventMidnight2 = new Date(eyr, emo - 1, edy);
+        const diffDays = Math.round((eventMidnight2 - localToday) / (1000 * 60 * 60 * 24));
+        const day = Math.max(0, Math.min(6, diffDays));
+        const isFree = ev.is_free;
+        const price = isFree ? "Free" : (ev.ticket_availability?.minimum_ticket_price?.display || "See site");
+        const cat = ev.category_id === "103" ? "Music" : ev.category_id === "108" ? "Sports" : ev.category_id === "105" ? "Arts" : "Music";
+        return {
+          id: `eb_${ev.id}`,
+          day,
+          title: ev.name?.text || "Louisville Event",
+          venue: ev.venue?.name || "Louisville Venue",
+          address: ev.venue ? `${ev.venue.address?.address_1 || ""}, Louisville, KY` : "Louisville, KY",
+          time: eventDate.toLocaleTimeString("en-US", {hour:"numeric", minute:"2-digit"}),
+          doors: "See venue",
+          category: cat,
+          emoji: cat === "Music" ? "🎵" : cat === "Sports" ? "🏅" : "🎨",
+          tags: [cat, isFree ? "Free" : price],
+          free: isFree,
+          price,
+          desc: ev.description?.text?.slice(0, 150) || `${ev.name?.text} in Louisville. Check Eventbrite for full details.`,
+          ticketUrl: ev.url,
+          ticketLabel: isFree ? "✅ Free Tickets" : "🎟 Get Tickets",
+        };
+      });
+      setEvents(prev => [...prev, ...mapped]);
+    } catch(err) {
+      console.error("Eventbrite fetch failed:", err);
+    }
   };
 
   // Admin state
@@ -404,7 +457,7 @@ Return only the JSON array, no markdown, no explanation.`;
               <div className="lml-badge">
                 <span className="lml-dot"/>
                 Louisville, KY
-                {aiLoading && <span style={{fontSize:10,color:"#ffb800",marginLeft:4}}>✦</span>}
+                {tmLoading && <span style={{fontSize:10,color:"#ffb800",marginLeft:4}}>✦</span>}
               </div>
             </div>
             <div className="lml-strip">
