@@ -313,13 +313,9 @@ export default function App() {
   const fetchTicketmasterEvents = async () => {
     setTmLoading(true);
     try {
-      const today = new Date();
-      const startDate = today.toISOString().split(".")[0] + "Z";
-      const endDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split(".")[0] + "Z";
-      const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${TM_KEY}&city=Louisville&stateCode=KY&countryCode=US&startDateTime=${startDate}&endDateTime=${endDate}&size=20&sort=date,asc`;
-      const res = await fetch(url);
+      const res = await fetch("/api/events");
       const data = await res.json();
-      const tmEvents = data._embedded?.events || [];
+      const tmEvents = data.ticketmaster || [];
       const mapped = tmEvents.map((ev, i) => {
         const eventDate = new Date(ev.dates?.start?.localDate);
         const diffDays = Math.round((eventDate - new Date(today.toDateString())) / (1000 * 60 * 60 * 24));
@@ -356,13 +352,9 @@ export default function App() {
 
   const fetchEventbriteEvents = async () => {
     try {
-      const today = new Date();
-      const startDate = today.toISOString().split(".")[0] + "Z";
-      const endDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split(".")[0] + "Z";
-      const url = `https://www.eventbriteapi.com/v3/events/search/?location.address=Louisville,KY&location.within=10mi&start_date.range_start=${startDate}&start_date.range_end=${endDate}&expand=venue,ticket_availability&token=${EB_KEY}`;
-      const res = await fetch(url);
+      const res = await fetch("/api/events");
       const data = await res.json();
-      const ebEvents = data.events || [];
+      const ebEvents = data.eventbrite || [];
       const mapped = ebEvents.map((ev, i) => {
         const eventDate = new Date(ev.start?.local);
         const today2 = new Date();
